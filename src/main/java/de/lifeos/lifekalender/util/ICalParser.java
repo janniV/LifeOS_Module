@@ -6,45 +6,67 @@ import net.fortuna.ical4j.data.CalendarBuilder;
 import net.fortuna.ical4j.data.CalendarOutputter;
 import net.fortuna.ical4j.data.ParserException;
 import net.fortuna.ical4j.model.Calendar;
+import net.fortuna.ical4j.model.Component;
 import net.fortuna.ical4j.model.Date;
 import net.fortuna.ical4j.model.DateTime;
-import net.fortuna.ical4j.model.Dur;
+import net.fortuna.ical4j.model.Month;
+import net.fortuna.ical4j.model.MonthList;
+import net.fortuna.ical4j.model.NumberList;
+import net.fortuna.ical4j.model.Recur;
+import net.fortuna.ical4j.model.WeekDay;
+import net.fortuna.ical4j.model.WeekDayList;
+import net.fortuna.ical4j.model.component.VAlarm;
 import net.fortuna.ical4j.model.component.VEvent;
-import net.fortuna.ical4j.model.property.*;
+import net.fortuna.ical4j.model.property.Action;
+import net.fortuna.ical4j.model.property.CalScale;
+import net.fortuna.ical4j.model.property.Description;
+import net.fortuna.ical4j.model.property.DtEnd;
+import net.fortuna.ical4j.model.property.DtStamp;
+import net.fortuna.ical4j.model.property.DtStart;
+import net.fortuna.ical4j.model.property.Location;
+import net.fortuna.ical4j.model.property.Method;
+import net.fortuna.ical4j.model.property.ProdId;
+import net.fortuna.ical4j.model.property.RRule;
+import net.fortuna.ical4j.model.property.Summary;
+import net.fortuna.ical4j.model.property.Trigger;
+import net.fortuna.ical4j.model.property.Uid;
+import net.fortuna.ical4j.model.property.Version;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.DayOfWeek;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Hilfsklasse zum Parsen und Generieren von iCal (ICS)-Dateien.
- * Nutzt die iCal4j-Bibliothek.
+ * Nutzt die iCal4j-Bibliothek (3.2.x).
  */
 public class ICalParser {
 
     /**
-     * Parsed eine ICS-Datei und gibt eine Liste von Terminen zurück.
-     * @param icsContent Der Inhalt der ICS-Datei als String
+     * Parsed eine ICS-Datei und gibt eine Liste von Terminen zurueck.
+     *
+     * @param icsContent        Der Inhalt der ICS-Datei als String
+     * @param defaultCalendarId Kalender-ID, der die geparsten Termine zugeordnet werden
      * @return Liste der geparsten Termine
      */
     public static List<Event> parseICal(String icsContent, String defaultCalendarId) {
         List<Event> events = new ArrayList<>();
-        
         try {
             InputStream inputStream = new ByteArrayInputStream(icsContent.getBytes(StandardCharsets.UTF_8));
-            CalendarBuilder builder = new CalendarBuilder();
-            Calendar calendar = builder.build(inputStream);
-            
-            for (Object component : calendar.getComponents()) {
+            Calendar calendar = new CalendarBuilder().build(inputStream);
+
+            for (Component component : calendar.getComponents()) {
                 if (component instanceof VEvent) {
-                    VEvent vEvent = (VEvent) component;
-                    Event event = parseVEvent(vEvent, defaultCalendarId);
+                    Event event = parseVEvent((VEvent) component, defaultCalendarId);
                     if (event != null) {
                         events.add(event);
                     }
@@ -53,7 +75,6 @@ public class ICalParser {
         } catch (ParserException | IOException e) {
             System.err.println("Fehler beim Parsen der ICS-Datei: " + e.getMessage());
         }
-        
         return events;
     }
 
@@ -62,63 +83,48 @@ public class ICalParser {
      */
     private static Event parseVEvent(VEvent vEvent, String defaultCalendarId) {
         try {
-            // Titel
-            String title = vEvent.getSummary() != null ? 
-                vEvent.getSummary().getValue() : "Unbenannter Termin";
-            
-            // Beschreibung
-            String details = vEvent.getDescription() != null ? 
-                vEvent.getDescription().getValue() : null;
-            
-            // Ort
-            String location = vEvent.getLocation() != null ? 
-                vEvent.getLocation().getValue() : null;
-            
-            // Startdatum/zeit
-            Property startProperty = vEvent.getStartDate();
-            LocalDateTime start = parseDateProperty(startProperty);
-            
-            // Enddatum/zeit
-            Property endProperty = vEvent.getEndDate();
-            LocalDateTime end = null;
-            if (endProperty != null) {
-                end = parseDateProperty(endProperty);
-            } else {
-                // Falls keine Endzeit angegeben ist, Dauer verwenden
-                Property durationProperty = vEvent.getDuration();
-                if (durationProperty != null) {
-                    Dur duration = (Dur) durationProperty;
-                    end = start.plus(duration.getPeriod());
-                } else {
-                    // Standard: 1 Stunde
-                    end = start.plusHours(1);
-                }
+            String title = vEvent.getSummary() != null
+                    ? vEvent.getSummary().getValue() : "Unbenannter Termin";
+            String details = vEvent.getDescription() != null
+                    ? vEvent.getDescription().getValue() : null;
+            String location = vEvent.getLocation() != null
+                    ? vEvent.getLocation().getValue() : null;
+
+            DtStart dtStart = vEvent.getStartDate();
+            if (dtStart == null || dtStart.getDate() == null) {
+                return null;
             }
-            
-            // Ganztägiger Termin?
-            boolean allDay = startProperty instanceof Date;
-            
-            // Erstelle das Event
+            Date startDate = dtStart.getDate();
+            boolean allDay = !(startDate instanceof DateTime);
+            LocalDateTime start = toLocalDateTime(startDate);
+
+            LocalDateTime end;
+            DtEnd dtEnd = vEvent.getEndDate();
+            if (dtEnd != null && dtEnd.getDate() != null) {
+                end = toLocalDateTime(dtEnd.getDate());
+            } else {
+                // Ohne explizites Enddatum: Standarddauer von einer Stunde.
+                end = start.plusHours(1);
+            }
+
             Event event = new Event(defaultCalendarId, title, start, end);
             event.setLocation(location);
             event.setDetails(details);
             event.setAllDay(allDay);
-            
-            // Wiederholungsregel (RRULE)
-            RRule rrule = vEvent.getProperty(RRule.RRULE);
+
+            RRule rrule = vEvent.getProperty("RRULE");
             if (rrule != null) {
                 RecurrenceRule recurrenceRule = parseRRule(rrule);
-                event.setRecurrenceRule(recurrenceRule);
+                if (recurrenceRule != null) {
+                    event.setRecurrenceRule(recurrenceRule);
+                }
             }
-            
-            // Erinnerung (VALARM)
-            VAlarm valarm = (VAlarm) vEvent.getProperty(VAlarm.VALARM);
-            if (valarm != null) {
-                // Einfache Implementierung: 10 Minuten vor Start
-                // (Könnte erweitert werden für komplexere Erinnerungen)
+
+            // Liegt eine Erinnerung (VALARM) vor, wird sie vereinfacht auf
+            // 10 Minuten vor Beginn gesetzt.
+            if (!vEvent.getAlarms().isEmpty()) {
                 event.setReminder(start.minusMinutes(10));
             }
-            
             return event;
         } catch (Exception e) {
             System.err.println("Fehler beim Parsen des VEvent: " + e.getMessage());
@@ -127,33 +133,14 @@ public class ICalParser {
     }
 
     /**
-     * Parsed ein Date/DateTime-Property in ein LocalDateTime.
-     */
-    private static LocalDateTime parseDateProperty(Property property) {
-        if (property instanceof DateTime) {
-            DateTime dateTime = (DateTime) property;
-            return dateTime.toString().contains("T") ?
-                LocalDateTime.parse(dateTime.toString().replace("T", " ").split("[+Z]")[0]) :
-                LocalDate.parse(dateTime.toString()).atStartOfDay();
-        } else if (property instanceof Date) {
-            Date date = (Date) property;
-            return date.toString().contains("T") ?
-                LocalDateTime.parse(date.toString().replace("T", " ").split("[+Z]")[0]) :
-                LocalDate.parse(date.toString()).atStartOfDay();
-        }
-        return LocalDateTime.now();
-    }
-
-    /**
      * Parsed eine RRULE in eine RecurrenceRule.
      */
     private static RecurrenceRule parseRRule(RRule rrule) {
         try {
+            Recur recur = rrule.getRecur();
+
             RecurrenceRule.Frequency frequency;
-            switch (rrule.getRecur().getFrequency()) {
-                case DAILY:
-                    frequency = RecurrenceRule.Frequency.DAILY;
-                    break;
+            switch (recur.getFrequency()) {
                 case WEEKLY:
                     frequency = RecurrenceRule.Frequency.WEEKLY;
                     break;
@@ -163,45 +150,44 @@ public class ICalParser {
                 case YEARLY:
                     frequency = RecurrenceRule.Frequency.YEARLY;
                     break;
+                case DAILY:
                 default:
                     frequency = RecurrenceRule.Frequency.DAILY;
             }
-            
-            int interval = rrule.getRecur().getInterval();
-            
-            // Für wöchentliche Wiederholung: Tage der Woche
-            java.util.List<java.time.DayOfWeek> daysOfWeek = new ArrayList<>();
-            if (frequency == RecurrenceRule.Frequency.WEEKLY && rrule.getRecur().getDayList() != null) {
-                for (net.fortuna.ical4j.model.WeekDay day : rrule.getRecur().getDayList()) {
-                    daysOfWeek.add(java.time.DayOfWeek.valueOf(day.name()));
+
+            int interval = recur.getInterval() > 0 ? recur.getInterval() : 1;
+
+            List<DayOfWeek> daysOfWeek = new ArrayList<>();
+            if (frequency == RecurrenceRule.Frequency.WEEKLY && recur.getDayList() != null) {
+                for (WeekDay day : recur.getDayList()) {
+                    daysOfWeek.add(toDayOfWeek(day));
                 }
             }
-            
-            // Für monatliche/jährliche Wiederholung: Tag des Monats
+
             int dayOfMonth = 0;
-            if (frequency == RecurrenceRule.Frequency.MONTHLY || frequency == RecurrenceRule.Frequency.YEARLY) {
-                dayOfMonth = rrule.getRecur().getDayOfMonth();
+            if ((frequency == RecurrenceRule.Frequency.MONTHLY
+                    || frequency == RecurrenceRule.Frequency.YEARLY)
+                    && recur.getMonthDayList() != null && !recur.getMonthDayList().isEmpty()) {
+                dayOfMonth = recur.getMonthDayList().get(0);
             }
-            
-            // Für jährliche Wiederholung: Monat
+
             int monthOfYear = 0;
-            if (frequency == RecurrenceRule.Frequency.YEARLY) {
-                monthOfYear = rrule.getRecur().getMonth();
+            if (frequency == RecurrenceRule.Frequency.YEARLY
+                    && recur.getMonthList() != null && !recur.getMonthList().isEmpty()) {
+                monthOfYear = recur.getMonthList().get(0).getMonthOfYear();
             }
-            
-            // Enddatum
+
             LocalDate endDate = null;
-            if (rrule.getRecur().getUntil() != null) {
-                endDate = LocalDate.parse(rrule.getRecur().getUntil().toString().split("T")[0]);
+            if (recur.getUntil() != null) {
+                endDate = toLocalDateTime(recur.getUntil()).toLocalDate();
             }
-            
-            // Maximale Wiederholungen
-            int maxOccurrences = rrule.getRecur().getCount();
-            
+
+            int maxOccurrences = recur.getCount() > 0 ? recur.getCount() : 0;
+
             return new RecurrenceRule(
                     frequency,
                     interval,
-                    daysOfWeek.toArray(new java.time.DayOfWeek[0]),
+                    daysOfWeek.toArray(new DayOfWeek[0]),
                     dayOfMonth,
                     monthOfYear,
                     endDate,
@@ -215,28 +201,26 @@ public class ICalParser {
 
     /**
      * Generiert eine ICS-Datei aus einer Liste von Terminen.
-     * @param events Liste der Termine
+     *
+     * @param events       Liste der Termine
      * @param calendarName Name des Kalenders
-     * @return ICS-Content als String
+     * @return ICS-Content als String oder null im Fehlerfall
      */
     public static String generateICal(List<Event> events, String calendarName) {
         try {
             Calendar calendar = new Calendar();
             calendar.getProperties().add(new ProdId("-//LifeOS LifeKalender//DE"));
             calendar.getProperties().add(Version.VERSION_2_0);
-            calendar.getProperties().add(new Calscale("GREGORIAN"));
-            calendar.getProperties().add(new Method(Method.PUBLISH));
-            
+            calendar.getProperties().add(CalScale.GREGORIAN);
+            calendar.getProperties().add(Method.PUBLISH);
+
             for (Event event : events) {
-                VEvent vEvent = createVEvent(event);
-                calendar.getComponents().add(vEvent);
+                calendar.getComponents().add(createVEvent(event));
             }
-            
+
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            CalendarOutputter outputter = new CalendarOutputter();
-            outputter.output(calendar, outputStream);
-            
-            return outputStream.toString(StandardCharsets.UTF_8.name());
+            new CalendarOutputter(false).output(calendar, outputStream);
+            return outputStream.toString(StandardCharsets.UTF_8);
         } catch (Exception e) {
             System.err.println("Fehler beim Generieren der ICS-Datei: " + e.getMessage());
             return null;
@@ -248,110 +232,131 @@ public class ICalParser {
      */
     private static VEvent createVEvent(Event event) {
         VEvent vEvent = new VEvent();
-        
-        // UID (eindeutige ID)
+
         vEvent.getProperties().add(new Uid(event.getId()));
-        
-        // Titel
+        vEvent.getProperties().add(new DtStamp());
         vEvent.getProperties().add(new Summary(event.getTitle()));
-        
-        // Beschreibung
+
         if (event.getDetails() != null && !event.getDetails().isBlank()) {
             vEvent.getProperties().add(new Description(event.getDetails()));
         }
-        
-        // Ort
         if (event.getLocation() != null && !event.getLocation().isBlank()) {
             vEvent.getProperties().add(new Location(event.getLocation()));
         }
-        
-        // Startdatum/zeit
+
         if (event.isAllDay()) {
-            Date startDate = new Date(event.getStart().toLocalDate());
-            vEvent.getProperties().add(startDate);
+            vEvent.getProperties().add(new DtStart(toICalDate(event.getStart().toLocalDate())));
+            // Ganztaegig: Ende ist exklusiv der naechste Tag.
+            vEvent.getProperties().add(new DtEnd(toICalDate(event.getEnd().toLocalDate().plusDays(1))));
         } else {
-            DateTime startDateTime = new DateTime(event.getStart());
-            vEvent.getProperties().add(startDateTime);
+            vEvent.getProperties().add(new DtStart(toICalDateTime(event.getStart())));
+            vEvent.getProperties().add(new DtEnd(toICalDateTime(event.getEnd())));
         }
-        
-        // Enddatum/zeit
-        if (event.isAllDay()) {
-            Date endDate = new Date(event.getEnd().toLocalDate().plusDays(1)); // Ganztägig: Ende ist nächster Tag
-            vEvent.getProperties().add(new EndDate(endDate));
-        } else {
-            DateTime endDateTime = new DateTime(event.getEnd());
-            vEvent.getProperties().add(new EndDate(endDateTime));
-        }
-        
-        // Erinnerung (VALARM)
+
         if (event.getReminder() != null) {
             VAlarm valarm = new VAlarm();
-            valarm.getProperties().add(new Action(Action.DISPLAY));
+            valarm.getProperties().add(Action.DISPLAY);
             valarm.getProperties().add(new Description("Erinnerung: " + event.getTitle()));
-            
-            // Trigger: 10 Minuten vor Start (könnte dynamisch berechnet werden)
-            Dur trigger = new Dur(-10, 0, 0, 0); // -PT10M
-            valarm.getProperties().add(new Trigger(trigger));
-            
-            vEvent.getProperties().add(valarm);
+            valarm.getProperties().add(new Trigger(Duration.ofMinutes(-10)));
+            vEvent.getComponents().add(valarm);
         }
-        
-        // Wiederholungsregel (RRULE)
+
         if (event.getRecurrenceRule() != null) {
-            RecurrenceRule rule = event.getRecurrenceRule();
-            RRule rrule = createRRule(rule, event.getStart());
+            RRule rrule = createRRule(event.getRecurrenceRule());
             if (rrule != null) {
                 vEvent.getProperties().add(rrule);
             }
         }
-        
         return vEvent;
     }
 
     /**
      * Erstellt eine RRULE aus einer RecurrenceRule.
      */
-    private static RRule createRRule(RecurrenceRule rule, LocalDateTime startDate) {
+    private static RRule createRRule(RecurrenceRule rule) {
         try {
-            net.fortuna.ical4j.model.Recur recur = new net.fortuna.ical4j.model.Recur(
-                    net.fortuna.ical4j.model.Recur.Frequency.valueOf(rule.getFrequency().name()),
-                    rule.getInterval()
-            );
-            
-            // Für wöchentliche Wiederholung: Tage der Woche
-            if (rule.getFrequency() == RecurrenceRule.Frequency.WEEKLY && rule.getDaysOfWeek().length > 0) {
-                net.fortuna.ical4j.model.WeekDayList dayList = new net.fortuna.ical4j.model.WeekDayList();
-                for (java.time.DayOfWeek day : rule.getDaysOfWeek()) {
-                    dayList.add(net.fortuna.ical4j.model.WeekDay.valueOf(day.name()));
+            Recur.Builder builder = new Recur.Builder()
+                    .frequency(Recur.Frequency.valueOf(rule.getFrequency().name()))
+                    .interval(rule.getInterval());
+
+            if (rule.getFrequency() == RecurrenceRule.Frequency.WEEKLY
+                    && rule.getDaysOfWeek().length > 0) {
+                WeekDayList dayList = new WeekDayList();
+                for (DayOfWeek day : rule.getDaysOfWeek()) {
+                    dayList.add(toWeekDay(day));
                 }
-                recur.setDayList(dayList);
+                builder.dayList(dayList);
             }
-            
-            // Für monatliche Wiederholung: Tag des Monats
-            if (rule.getFrequency() == RecurrenceRule.Frequency.MONTHLY && rule.getDayOfMonth() != 0) {
-                recur.setDayOfMonth(rule.getDayOfMonth());
+
+            if (rule.getFrequency() == RecurrenceRule.Frequency.MONTHLY
+                    && rule.getDayOfMonth() != 0) {
+                NumberList monthDayList = new NumberList();
+                monthDayList.add(rule.getDayOfMonth());
+                builder.monthDayList(monthDayList);
             }
-            
-            // Für jährliche Wiederholung: Monat und Tag
+
             if (rule.getFrequency() == RecurrenceRule.Frequency.YEARLY) {
-                recur.setMonth(rule.getMonthOfYear());
-                recur.setDayOfMonth(rule.getDayOfMonth());
+                if (rule.getMonthOfYear() != 0) {
+                    MonthList monthList = new MonthList();
+                    monthList.add(new Month(rule.getMonthOfYear()));
+                    builder.monthList(monthList);
+                }
+                if (rule.getDayOfMonth() != 0) {
+                    NumberList monthDayList = new NumberList();
+                    monthDayList.add(rule.getDayOfMonth());
+                    builder.monthDayList(monthDayList);
+                }
             }
-            
-            // Enddatum
+
             if (rule.getEndDate() != null) {
-                recur.setUntil(new Date(rule.getEndDate()));
+                builder.until(toICalDate(rule.getEndDate()));
             }
-            
-            // Maximale Wiederholungen
             if (rule.getMaxOccurrences() > 0) {
-                recur.setCount(rule.getMaxOccurrences());
+                builder.count(rule.getMaxOccurrences());
             }
-            
-            return new RRule(recur);
+
+            return new RRule(builder.build());
         } catch (Exception e) {
             System.err.println("Fehler beim Erstellen der RRULE: " + e.getMessage());
             return null;
+        }
+    }
+
+    private static LocalDateTime toLocalDateTime(Date date) {
+        return LocalDateTime.ofInstant(Instant.ofEpochMilli(date.getTime()), ZoneId.systemDefault());
+    }
+
+    private static DateTime toICalDateTime(LocalDateTime dateTime) {
+        return new DateTime(java.util.Date.from(dateTime.atZone(ZoneId.systemDefault()).toInstant()));
+    }
+
+    private static Date toICalDate(LocalDate date) {
+        return new Date(java.util.Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+    }
+
+    private static WeekDay toWeekDay(DayOfWeek day) {
+        switch (day) {
+            case TUESDAY:   return WeekDay.TU;
+            case WEDNESDAY: return WeekDay.WE;
+            case THURSDAY:  return WeekDay.TH;
+            case FRIDAY:    return WeekDay.FR;
+            case SATURDAY:  return WeekDay.SA;
+            case SUNDAY:    return WeekDay.SU;
+            case MONDAY:
+            default:        return WeekDay.MO;
+        }
+    }
+
+    private static DayOfWeek toDayOfWeek(WeekDay weekDay) {
+        switch (weekDay.getDay()) {
+            case TU: return DayOfWeek.TUESDAY;
+            case WE: return DayOfWeek.WEDNESDAY;
+            case TH: return DayOfWeek.THURSDAY;
+            case FR: return DayOfWeek.FRIDAY;
+            case SA: return DayOfWeek.SATURDAY;
+            case SU: return DayOfWeek.SUNDAY;
+            case MO:
+            default: return DayOfWeek.MONDAY;
         }
     }
 }

@@ -288,7 +288,8 @@ public class MainView {
             deleteCalendarItem.setOnAction(e -> deleteCalendar(calendar));
             
             calendarContextMenu.getItems().addAll(editCalendarItem, deleteCalendarItem);
-            calendarItem.setContextMenu(calendarContextMenu);
+            calendarItem.setOnContextMenuRequested(e ->
+                    calendarContextMenu.show(calendarItem, e.getScreenX(), e.getScreenY()));
             
             calendarList.getChildren().add(calendarItem);
         }
@@ -468,7 +469,7 @@ public class MainView {
     }
 
     private void showNewCalendarDialog() {
-        Dialog<String> dialog = new Dialog<>();
+        Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Neuer Kalender");
         dialog.setHeaderText("Erstellen Sie einen neuen Kalender");
         
@@ -493,6 +494,7 @@ public class MainView {
         ButtonType cancelButton = new ButtonType("Abbrechen", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(saveButton, cancelButton);
         
+        dialog.setResultConverter(buttonType -> buttonType);
         Optional<ButtonType> result = dialog.showAndWait();
         if (result.isPresent() && result.get() == saveButton && !nameField.getText().trim().isEmpty()) {
             String color = String.format("#%02X%02X%02X", 
@@ -500,8 +502,7 @@ public class MainView {
                     (int) (colorPicker.getValue().getGreen() * 255),
                     (int) (colorPicker.getValue().getBlue() * 255));
             
-            Calendar calendar = new Calendar(nameField.getText().trim(), color);
-            calendarService.createCalendar(calendar.getName());
+            Calendar calendar = calendarService.createCalendar(nameField.getText().trim());
             calendar.setColor(color);
             calendarService.updateCalendar(calendar);
             
@@ -511,7 +512,7 @@ public class MainView {
     }
 
     private void showEditCalendarDialog(Calendar calendar) {
-        Dialog<Void> dialog = new Dialog<>();
+        Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Kalender bearbeiten");
         dialog.setHeaderText("Bearbeiten Sie den Kalender: " + calendar.getName());
         
@@ -538,6 +539,7 @@ public class MainView {
         ButtonType cancelButton = new ButtonType("Abbrechen", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(saveButton, cancelButton);
         
+        dialog.setResultConverter(buttonType -> buttonType);
         Optional<ButtonType> result = dialog.showAndWait();
         if (result.isPresent() && result.get() == saveButton) {
             String newName = nameField.getText().trim();
@@ -572,7 +574,7 @@ public class MainView {
     }
 
     private void showImportDialog() {
-        Dialog<Void> dialog = new Dialog<>();
+        Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Importieren");
         dialog.setHeaderText("Importieren Sie Termine aus einer iCal (ICS)-Datei");
         
@@ -605,6 +607,7 @@ public class MainView {
         ButtonType cancelButton = new ButtonType("Abbrechen", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(importButton, cancelButton);
         
+        dialog.setResultConverter(buttonType -> buttonType);
         Optional<ButtonType> result = dialog.showAndWait();
         if (result.isPresent() && result.get() == importButton) {
             String icsContent = icsContentArea.getText();
@@ -631,7 +634,7 @@ public class MainView {
     }
 
     private void showImportPreviewDialog(List<Event> events, String calendarId) {
-        Dialog<Void> dialog = new Dialog<>();
+        Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Import-Vorschau");
         dialog.setHeaderText("Es wurden " + events.size() + " Termine gefunden. Wählen Sie aus, welche importiert werden sollen:");
         
@@ -665,6 +668,7 @@ public class MainView {
         ButtonType cancelButton = new ButtonType("Abbrechen", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(importButton, cancelButton);
         
+        dialog.setResultConverter(buttonType -> buttonType);
         Optional<ButtonType> result = dialog.showAndWait();
         if (result.isPresent() && result.get() == importButton) {
             for (Event event : eventListView.getSelectionModel().getSelectedItems()) {
@@ -684,7 +688,7 @@ public class MainView {
     }
 
     private void showExportDialog() {
-        Dialog<Void> dialog = new Dialog<>();
+        Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Exportieren");
         dialog.setHeaderText("Exportieren Sie Termine als iCal (ICS)-Datei");
         
@@ -729,6 +733,7 @@ public class MainView {
         ButtonType cancelButton = new ButtonType("Abbrechen", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(exportButton, cancelButton);
         
+        dialog.setResultConverter(buttonType -> buttonType);
         Optional<ButtonType> result = dialog.showAndWait();
         if (result.isPresent() && result.get() == exportButton) {
             String calendarName = calendarComboBox.getValue();
@@ -771,7 +776,7 @@ public class MainView {
     }
 
     private void showExportResultDialog(String icsContent) {
-        Dialog<Void> dialog = new Dialog<>();
+        Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Export-Ergebnis");
         dialog.setHeaderText("Die ICS-Datei wurde erfolgreich generiert:");
         
@@ -787,6 +792,7 @@ public class MainView {
         ButtonType closeButton = new ButtonType("Schließen", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(copyButton, closeButton);
         
+        dialog.setResultConverter(buttonType -> buttonType);
         Optional<ButtonType> result = dialog.showAndWait();
         if (result.isPresent() && result.get() == copyButton) {
             javafx.scene.input.Clipboard clipboard = javafx.scene.input.Clipboard.getSystemClipboard();
