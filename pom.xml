@@ -16,6 +16,19 @@
     </properties>
 
     <dependencies>
+        <!-- Die core.*-Interfaces stellt der LifeOS-Host zur Laufzeit bereit.
+             Wir liefern einen Stub-Jar mit ausschliesslich den API-Signaturen mit,
+             damit dieses Modul eigenstaendig gebaut werden kann, ohne den
+             vollstaendigen LifeOS-Quellbaum zu benoetigen. build.sh erzeugt den
+             Stub-Jar bei Bedarf neu aus lifeos-stub/src/. -->
+        <dependency>
+            <groupId>de.janniv</groupId>
+            <artifactId>lifeos-core-stub</artifactId>
+            <version>0.2.1</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lifeos-stub/lifeos-core-stub.jar</systemPath>
+        </dependency>
+
         <!-- JavaFX Controls: Grundlegende UI-Elemente -->
         <dependency>
             <groupId>org.openjfx</groupId>
