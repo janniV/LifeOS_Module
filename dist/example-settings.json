@@ -1,0 +1,25 @@
+{
+  "malojaUrl" : "http://nas.local:42010",
+  "malojaApiKey" : "your-private-api-key-here",
+  "pollIntervalMs" : 1500,
+  "scrobbleAtFraction" : 0.5,
+  "scrobbleAfterSeconds" : 240,
+  "minTrackLengthSeconds" : 30,
+  "skipThresholdSeconds" : 5,
+  "smartArtistParsing" : true,
+  "useMusicBrainz" : true,
+  "socksProxyHost" : "",
+  "socksProxyPort" : 0,
+  "proxyMode" : "none",
+  "preferredSource" : "",
+  "notifyOnScrobble" : false,
+  "ignoredSources" : [ "firefox", "obs" ],
+  "artistPatterns" : [
+    "^(?<artist>[^\\-\\u2013\\u2014]+?)\\s*[\\-\\u2013\\u2014]\\s*(?<title>.+)$",
+    "^\\s*\\[(?<artist>[^\\]]+)\\]\\s*(?<title>.+)$",
+    "^\\s*(?<artist>[^\\u2018\\u2019']+?):\\s+(?<title>.+)$"
+  ],
+  "uploaderBlacklist" : [ "topic", "vevo", "official", "records", "music", "channel" ],
+  "historyLimit" : 200,
+  "enabled" : true
+}
