@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>de.janniv</groupId>
+    <artifactId>lifeos-filemanager</artifactId>
+    <version>0.1.1</version>
+    <packaging>jar</packaging>
+
+    <name>LifeFileManager</name>
+    <description>Dateimanager-Modul fuer LifeOS. Durchsucht und verwaltet die LifeOS-Ordnerstruktur.</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>17</maven.compiler.release>
+        <javafx.version>21</javafx.version>
+    </properties>
+
+    <dependencies>
+        <!-- LifeOS-Core-Stub: Compile-time-only Interfaces, JAR liegt im Repo. -->
+        <dependency>
+            <groupId>de.janniv</groupId>
+            <artifactId>lifeos-core-stub</artifactId>
+            <version>0.1.1</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lifeos-stub/lifeos-core-stub.jar</systemPath>
+        </dependency>
+
+        <!-- JavaFX (system-scoped fuer standalone-Build ohne Maven Central). -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+            <scope>system</scope>
+            <systemPath>/tmp/all-deps/javafx-controls-21.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls-linux</artifactId>
+            <version>${javafx.version}</version>
+            <scope>system</scope>
+            <systemPath>/tmp/all-deps/javafx-controls-21-linux.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+            <scope>system</scope>
+            <systemPath>/tmp/all-deps/javafx-graphics-21.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics-linux</artifactId>
+            <version>${javafx.version}</version>
+            <scope>system</scope>
+            <systemPath>/tmp/all-deps/javafx-graphics-21-linux.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-base</artifactId>
+            <version>${javafx.version}</version>
+            <scope>system</scope>
+            <systemPath>/tmp/all-deps/javafx-base-21.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-base-linux</artifactId>
+            <version>${javafx.version}</version>
+            <scope>system</scope>
+            <systemPath>/tmp/all-deps/javafx-base-21-linux.jar</systemPath>
+        </dependency>
+
+        <!-- Jackson fuer robustes JSON-Parsing der Agenten-Tool-Eingaben. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.15.2</version>
+            <scope>system</scope>
+            <systemPath>/tmp/all-deps/jackson-databind-2.15.2.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.15.2</version>
+            <scope>system</scope>
+            <systemPath>/tmp/all-deps/jackson-core-2.15.2.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>2.15.2</version>
+            <scope>system</scope>
+            <systemPath>/tmp/all-deps/jackson-annotations-2.15.2.jar</systemPath>
+        </dependency>
+
+        <!-- Ikonli FontAwesome5 fuer Sidebar- und UI-Icons. -->
+        <dependency>
+            <groupId>org.kordamp.ikonli</groupId>
+            <artifactId>ikonli-core</artifactId>
+            <version>12.3.1</version>
+            <scope>system</scope>
+            <systemPath>/tmp/all-deps/ikonli-core-12.3.1.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>org.kordamp.ikonli</groupId>
+            <artifactId>ikonli-javafx</artifactId>
+            <version>12.3.1</version>
+            <scope>system</scope>
+            <systemPath>/tmp/all-deps/ikonli-javafx-12.3.1.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>org.kordamp.ikonli</groupId>
+            <artifactId>ikonli-fontawesome5-pack</artifactId>
+            <version>12.3.1</version>
+            <scope>system</scope>
+            <systemPath>/tmp/all-deps/ikonli-fontawesome5-pack-12.3.1.jar</systemPath>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>LifeFileManager-${project.version}</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

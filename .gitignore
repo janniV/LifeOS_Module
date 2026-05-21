@@ -1,0 +1,7 @@
+target/
+*.class
+.idea/
+*.iml
+.vscode/
+lifeos-stub/out/
+lifeos-stub/lib/
