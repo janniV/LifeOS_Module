@@ -1,0 +1,192 @@
+LifeOS-Modulstandard
+
+Ziel
+Ein Modul soll sich in LifeOS wie ein nativer Teil des Systems verhalten: Es erscheint in der Sidebar, besitzt einen stabilen Namen und eine stabile ID, bekommt einen eigenen Datenbereich, kann LifeOS-Dienste nutzen, liefert der KI Kontext und Werkzeuge und räumt seine Ressourcen beim Beenden sauber auf.
+
+Empfohlene Modulform
+Für vollständige In-Process-Integration sollte ein Java-Modul als JAR gebaut werden, das core.LifeModule implementiert und über META-INF/services/core.LifeModule registriert ist. Manifestbasierte Web-, Python-, Node-, PHP-, Native- und Java-Prozessmodule werden über die LifeOS Runtime Bridge vorbereitet: LifeOS sieht sie als Modul, stellt Theme-, Speicher-, Berechtigungs- und Core-Informationen bereit und startet externe Runtimes kontrolliert als Prozess.
+
+Pflichtschnittstelle core.LifeModule
+- getModuleName(): Anzeigename für Sidebar, Settings und Agenten.
+- getModuleId(): stabile, eindeutige ID, z. B. com.lifeos.notes. Diese ID wird für den isolierten Speicherordner verwendet.
+- getModuleIconPath(): optionaler Bildpfad für ältere/klassische Icon-Nutzung.
+- getFontIconName(): FontAwesome/Ikonli-Icon für die Sidebar, z. B. fas-calendar, fas-book, fas-terminal oder fab-python.
+- getMainView(): JavaFX-Hauptansicht des Moduls.
+- onInitialize(CoreServices core): Einstiegspunkt. Hier CoreServices speichern, Datenordner anlegen, Listener starten und externe Ressourcen vorbereiten.
+- onShutdown(): Threads, Timer, Prozesse, Streams und Listener beenden.
+- getAIContext(): Prompt-Layer, optionaler LoRA-Pfad und KI-Werkzeuge bereitstellen.
+- getDashboardWidget(): optionales Startseiten-Widget.
+- getSubModules(): optionale Unteransichten, die als eigene Sidebar-Einträge erscheinen.
+- onUninstall(): optionale endgültige Aufräumarbeiten vor dem Entfernen.
+
+Registrierung als JAR
+Im JAR muss diese Datei liegen:
+META-INF/services/core.LifeModule
+
+Inhalt der Datei:
+dein.package.DeinLifeOSModul
+
+Die Modulklasse braucht einen parameterlosen Konstruktor, damit der PluginLoader sie instanziieren kann.
+
+Minimalstruktur eines Java-Moduls
+public class NotesModule implements LifeModule {
+    private CoreServices core;
+
+    public String getModuleName() { return "Notizen"; }
+    public String getModuleId() { return "com.lifeos.notes"; }
+    public String getModuleIconPath() { return null; }
+    public String getFontIconName() { return "fas-sticky-note"; }
+
+    public void onInitialize(CoreServices core) {
+        this.core = core;
+        Path storage = core.getModuleStoragePath(getModuleId());
+    }
+
+    public Node getMainView() {
+        return new Label("Notizen");
+    }
+
+    public ModuleAIContext getAIContext() {
+        return new ModuleAIContext(
+            "Du hilfst im Notizen-Modul. Nutze Tools nur, wenn sie zur Aufgabe passen.",
+            null,
+            java.util.List.of()
+        );
+    }
+
+    public void onShutdown() {}
+}
+
+CoreServices richtig nutzen
+- core.getModuleStoragePath(getModuleId()) für private Moduldaten verwenden.
+- core.getFileService() nutzen, wenn Dateien in der verwalteten LifeOS-Ordnerstruktur liegen sollen.
+- Für gemeinsame Dateien immer LifeOSFileReference, LifeOSFileMetadata und die Methoden des LifeOSFileService nutzen; keine absoluten Host-Pfade in Modulmodellen speichern.
+- Gemeinsame Arbeitsbereiche liegen als Scope WORKSPACE im Core. Eigene Moduldaten bleiben Scope MODULE. Exporte liegen Scope EXPORT.
+- Dateianhänge an Termine, Aufgaben, Notizen oder andere Modulobjekte über attachToObject(...) speichern, damit ein späterer Dateimanager die Verknüpfungen sehen kann.
+- listProviders() liefert aktuell den lokalen LifeOS-Speicher und ist bereits auf spätere NAS-/Cloud-Provider vorbereitet.
+- core.openModule(name) kann andere Module öffnen.
+- core.getAvailableModules() liefert bekannte Module.
+- core.getAvailableAITools() liefert zentrale Agenten-Werkzeuge.
+- core.getRoadmapService(), core.getTrashService() und core.getAgentRuntimeStore() nur nach null-Prüfung verwenden.
+- core.setModuleBadge(getModuleName(), count) setzt die rote Sidebar-Badge-Anzeige.
+- core.sendNotification(text) für systemweite Hinweise nutzen.
+- core.showDialog(title, node) und core.openInNewWindow(module) für einheitliche Fenster/Dialoge nutzen.
+- core.getThemeState() liefert Light-/Darkmode, Designmodus, Sidebar-Zustand, Font-Skalierung und CSS-Variablen.
+- core.isModulePermissionAllowed(moduleId, permission) prüft freigegebene Runtime-Rechte.
+- core.getSamiraAutomationLevel(moduleId) liefert die effektive Samira-Automationsstufe.
+
+Theme und UI
+- Module müssen den aktuellen LifeOS-Light-/Darkmode übernehmen.
+- JavaFX-Module erben das Theme über die LifeOS-Scene und können zusätzlich onThemeChanged(...) überschreiben.
+- Web-Module erhalten window.coreAPI, coreAPI.getThemeJson() und das DOM-Event lifeos-theme-changed.
+- Web-Module sollen die LifeOS-CSS-Variablen nutzen, statt eigene harte Light-/Dark-Farben zu erzwingen.
+- Externe Python-, Node-, PHP- oder Native-Programme sollen ihre UI bevorzugt als Web-Oberfläche bereitstellen, damit LifeOS sie per WebView einbetten kann.
+
+Agentenfähigkeiten
+Ein Modul erweitert Samira und andere Agenten über ModuleAIContext.
+- situationalPrompt beschreibt knapp, wobei das Modul hilft, welche Daten relevant sind und welche Grenzen gelten.
+- requestedLoRAPath kann einen modulspezifischen Adapter benennen; null bedeutet kein Adapter.
+- registeredTools enthält AITool-Instanzen für konkrete Aktionen.
+
+AITool-Regeln
+- Toolnamen kurz, stabil und eindeutig wählen, z. B. notes_search oder notes_create.
+- description so schreiben, dass der Agent weiß, wann das Werkzeug verwendet werden soll.
+- inputSchema als JSON-Beispiel angeben, z. B. {"query":"Suchtext"}.
+- AIToolSafety passend setzen: READ_ONLY für Lesen, UI_ACTION für UI-Navigation, USER_DATA_WRITE für Datenänderungen, DESTRUCTIVE für Löschen.
+- requiresConfirmation aktivieren, wenn ein Werkzeug riskante, irreversible oder überraschende Aktionen ausführt.
+- Tool-Ergebnisse als AgentToolResult.success(...), AgentToolResult.error(...) oder AgentToolResult.confirmationRequired(...) zurückgeben.
+- JSON-Eingaben robust mit Jackson lesen; fehlende Felder klar als Fehler melden.
+- JavaFX-UI nur über Platform.runLater(...) verändern.
+
+Runtime Bridge und Berechtigungen
+- Jedes Modul arbeitet grundsätzlich in seinem eigenen LifeOS-Modulordner.
+- Direkte Host-Pfade außerhalb von LifeOS sind nicht erlaubt; NAS und Cloud werden später als LifeOS-Speicherquellen angebunden.
+- Gemeinsame Dateien werden über providerId, scope, ownerId und path referenziert. Erlaubte Scopes für externe Module sind module, workspace und export.
+- Die Berechtigungen lifeos.files.read, lifeos.files.write, lifeos.files.attach und lifeos.files.remote steuern gemeinsame LifeOS-Dateien, Dateianhänge und spätere externe Speicherquellen.
+- Internetzugriff wird global und pro Modul in den Settings freigegeben. Wenn LifeOS global kein Internet darf, darf es kein Modul.
+- Abhängigkeiten wie Maven-, npm-, pip- oder Composer-Pakete laufen später über die Runtime Bridge, sobald das ausführende Modul Internetzugriff hat.
+- Cross-Modul-Lesen und -Schreiben ist erlaubt, aber über offizielle Core-/Modul-Tools statt über direkte Dateipfade.
+- Dateien im eigenen Modulordner dürfen durch das Modul verwaltet werden; fremde Daten werden über sichere Werkzeuge geändert.
+- Samiras Code-Automation folgt einer Stufe von 0 bis 5: Nur lesen, Vorschläge, kleine Änderungen, Projektänderungen, Runtime/Dependencies, systemweite Aktionen.
+- Prozessmodule erhalten LIFEOS_MODULE_ID, LIFEOS_STORAGE_PATH, LIFEOS_THEME_JSON, LIFEOS_PERMISSIONS_JSON, LIFEOS_NETWORK_ALLOWED und LIFEOS_BRIDGE_PROTOCOL als Umgebungsvariablen.
+- Prozessmodule können bei bridgeProtocol stdio-jsonrpc JSON-Zeilen an stdout schreiben. LifeOS antwortet auf stdin.
+- Wichtige Bridge-Methoden: lifeos.bridge.hello, lifeos.theme.get, lifeos.permission.check, lifeos.permissions.list, lifeos.network.fetchText, lifeos.storage.readText, lifeos.storage.writeText, lifeos.storage.list, lifeos.modules.readText, lifeos.modules.writeText, lifeos.modules.listFiles, lifeos.files.providers, lifeos.files.metadata, lifeos.files.list, lifeos.files.readText, lifeos.files.writeText, lifeos.files.createFolder, lifeos.files.attach, lifeos.files.attachments, lifeos.llm.complete und lifeos.notify.
+- Die Bridge löst Pfade immer innerhalb von data/modules/<moduleId> auf. Absolute Host-Pfade werden nicht über die Bridge akzeptiert.
+
+Zugriff auf LifeOS' internes LLM
+Der stabile Integrationsweg ist: Module liefern Prompt-Kontext und Tools über getAIContext(); der Core sammelt diese Informationen und gibt sie an den Agenten weiter. Ein Modul sollte SamiraAIService nicht direkt besitzen oder neu starten.
+JavaFX-Module nutzen core.completeWithInternalLLM(...). Web-Module nutzen coreAPI.completeWithInternalLLM(...) und coreAPI.fetchTextJson(url). Prozessmodule nutzen lifeos.llm.complete und lifeos.network.fetchText über die Runtime Bridge. Alle Wege prüfen die jeweilige Modulberechtigung.
+
+Wenn ein Modul wirklich selbst Text generieren muss, soll es bevorzugt den bereits laufenden lokalen, OpenAI-kompatiblen LifeOS-Endpunkt verwenden, sobald das Modell aktiv ist:
+POST http://127.0.0.1:8080/v1/chat/completions
+Content-Type: application/json
+
+Beispiel-Body:
+{
+  "messages": [
+    {"role":"system","content":"Du arbeitest für das Modul ..."},
+    {"role":"user","content":"..."}
+  ],
+  "temperature": 0.7,
+  "max_tokens": 2048,
+  "stream": false
+}
+
+Wichtig: Das Modul soll fehlende Modelle, Verbindungsfehler und Simulationsmodus freundlich abfangen. Für Aktionen mit LifeOS-Daten sind Agenten-Tools meist besser als direkte LLM-Aufrufe, weil sie sicherer, überprüfbarer und im Core sichtbar bleiben.
+
+Sidebar-Eintrag und Icon
+- JAR-Module erscheinen automatisch, wenn sie geladen und nicht deaktiviert sind.
+- getModuleName() bestimmt den Sidebar-Text.
+- getFontIconName() bestimmt das moderne Sidebar-Icon. LifeOS nutzt Ikonli FontAwesome 5 Namen wie fas-cube, fas-calendar, fas-book, fas-terminal, fas-sticky-note, fas-tasks oder fab-java.
+- getModuleIconPath() oder ein Bildpfad im Manifest-Icon kann ein echtes PNG/JPG-Icon fuer die Sidebar liefern.
+- getSubModules() kann zusätzliche Sidebar-Einträge liefern; jedes Submodul braucht eigenen Namen, eigene ID und eigenes Icon.
+- Badges werden über core.setModuleBadge(getModuleName(), count) gesetzt und beim Öffnen entfernt.
+
+Manifest-Module
+Für einfache Web-, Python-, Node-, PHP-, Native- oder Java-Prozessmodule kann ein Ordner mit manifest.json installiert werden. Beispiel:
+{
+  "manifestVersion": 2,
+  "moduleId": "com.lifeos.example",
+  "moduleName": "Beispiel",
+  "type": "web",
+  "executable": "index.html",
+  "icon": "fas-cube",
+  "uiMode": "webview",
+  "bridgeProtocol": "webview",
+  "themeAware": true,
+  "permissions": [
+    "lifeos.storage.module",
+    "lifeos.theme.read",
+    "lifeos.core.bridge",
+    "lifeos.files.read",
+    "lifeos.files.write",
+    "lifeos.files.attach",
+    "lifeos.llm.internal"
+  ],
+  "aiTools": []
+}
+
+Unterstützte type-Werte:
+- web: lädt die HTML-Datei in einer WebView.
+- python: startet das angegebene Python-Skript als Prozess.
+- node: startet eine JS/MJS/CJS-Datei über Node.js als Prozess.
+- php: startet eine PHP-Datei über PHP als Prozess.
+- native: startet eine ausführbare Datei als Prozess.
+- java: startet ein ausführbares JAR als externen Java-Prozess. Mit uiMode embedded-window versucht LifeOS, das fremde Windows-Fenster im Hauptbereich zu hosten.
+
+Für web ist bridgeProtocol normalerweise webview. Für python, node, php und native Runtime-Module ist stdio-jsonrpc der empfohlene Wert. Für fremde startbare Java-JARs ohne LifeOS-Bridge sollte none verwendet werden.
+
+Hinweis: Das Feld aiTools im Manifest beschreibt derzeit nur Metadaten. Echte ausführbare Agenten-Werkzeuge kommen in JAR-Modulen über getAIContext(); externe Runtime-Module werden dafür über die Runtime Bridge vorbereitet.
+
+Qualitätscheck vor Auslieferung
+- Modul-ID bleibt über Versionen hinweg identisch.
+- onShutdown beendet alle Hintergrundarbeit.
+- Daten liegen im Modul-Speicher, nicht in zufälligen Host-Pfaden.
+- Gemeinsame Dateien werden als LifeOSFileReference gespeichert und nicht als absoluter Pfad.
+- Dateianhänge an Modulobjekte werden über den Core-Dateikatalog registriert.
+- Light-/Darkmode und Schriftgrößen-Skalierung werden übernommen.
+- UI blockiert den JavaFX-Thread nicht.
+- Tool-Aktionen sind JSON-basiert, sicher eingestuft und liefern strukturierte Ergebnisse.
+- Sidebar-Icon ist ein gültiger FontAwesome/Ikonli-Name oder ein vorhandener Bildpfad.
+- Manifest-Module deklarieren ihre benötigten permissions.
+- Installation, Aktualisierung, Deaktivierung und Entfernung funktionieren ohne Neustart.
