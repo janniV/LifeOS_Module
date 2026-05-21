@@ -1,0 +1,98 @@
+/*
+ * Stylesheet des LifeSuite-Editors fuer die JavaFX-Oberflaeche.
+ * Die Farbwerte stammen aus den vom LifeOS-Core bereitgestellten Farbvariablen
+ * (-color-...), damit Classic-/Modern-Design und Light-/Dark-Modus ohne weitere
+ * Sonderbehandlung uebernommen werden. Im eigenstaendigen Betrieb setzt die
+ * Editor-Ansicht dieselben Variablen selbst.
+ */
+
+.lifesuite-editor {
+    -fx-background-color: -color-bg-default;
+}
+
+/* Werkzeugleiste und ihr scrollbarer Behaelter */
+.lifesuite-toolbar-scroll {
+    -fx-background-color: -color-bg-subtle;
+    -fx-border-color: transparent transparent -color-border-default transparent;
+    -fx-padding: 0;
+}
+
+.lifesuite-toolbar-scroll > .viewport {
+    -fx-background-color: -color-bg-subtle;
+}
+
+.lifesuite-toolbar {
+    -fx-background-color: -color-bg-subtle;
+    -fx-padding: 6 10 6 10;
+    -fx-spacing: 4;
+}
+
+/* Markdown-Eingabefeld */
+.lifesuite-code {
+    -fx-font-family: "Consolas", "Menlo", "monospace";
+    -fx-font-size: 1.05em;
+}
+
+.lifesuite-code,
+.lifesuite-code .content {
+    -fx-background-color: -color-bg-subtle;
+}
+
+.lifesuite-code .text {
+    -fx-fill: -color-fg-default;
+}
+
+.lifesuite-code:focused {
+    -fx-background-color: -color-bg-subtle;
+}
+
+/* Behaelter des Buch-Modus */
+.lifesuite-book-scroll,
+.lifesuite-book-scroll > .viewport {
+    -fx-background-color: -color-bg-default;
+}
+
+/* Inhaltsverzeichnis */
+.lifesuite-toc {
+    -fx-background-color: -color-bg-subtle;
+    -fx-border-color: transparent -color-border-default transparent transparent;
+    -fx-spacing: 6;
+}
+
+.lifesuite-toc-title {
+    -fx-font-weight: bold;
+    -fx-text-fill: -color-fg-muted;
+    -fx-padding: 4 0 4 4;
+}
+
+.lifesuite-toc-list {
+    -fx-background-color: transparent;
+}
+
+.lifesuite-toc-list .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: -color-fg-default;
+    -fx-padding: 4 6 4 6;
+}
+
+.lifesuite-toc-list .list-cell:filled:hover {
+    -fx-background-color: -color-bg-default;
+}
+
+.lifesuite-toc-list .list-cell:filled:selected {
+    -fx-background-color: -color-accent-emphasis;
+    -fx-text-fill: white;
+}
+
+/* Schaltflaeche zum Verlassen der ablenkungsfreien Modi */
+.lifesuite-exit-overlay {
+    -fx-background-color: rgba(0, 0, 0, 0.55);
+    -fx-text-fill: white;
+    -fx-background-radius: 6;
+    -fx-padding: 6 14 6 14;
+    -fx-cursor: hand;
+}
+
+.lifesuite-exit-overlay:hover {
+    -fx-background-color: -color-accent-emphasis;
+}
