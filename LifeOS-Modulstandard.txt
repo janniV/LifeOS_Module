@@ -28,6 +28,95 @@ dein.package.DeinLifeOSModul
 
 Die Modulklasse braucht einen parameterlosen Konstruktor, damit der PluginLoader sie instanziieren kann.
 
+Kompakte Core-API-Signaturen für Modul-Stubs
+Diese Signaturen reichen, um externe Module gegen LifeOS zu kompilieren. Stubs müssen dieselben Packages, Klassennamen, Konstruktoren und Methodensignaturen besitzen.
+
+core.LifeModule
+public interface LifeModule {
+    String getModuleName();
+    default String getModuleIconPath() { return null; }
+    Node getMainView();
+    void onInitialize(CoreServices core);
+    void onShutdown();
+    ModuleAIContext getAIContext();
+    default String getFontIconName() { return "fas-cube"; }
+    String getModuleId();
+    default void onUninstall() {}
+    default Node getDashboardWidget() { return null; }
+    default java.util.List<LifeModule> getSubModules() { return null; }
+    default String getRuntimeType() { return "java"; }
+    default java.util.List<String> getRequestedPermissions() { return java.util.Collections.emptyList(); }
+    default void onThemeChanged(LifeOSThemeState themeState) {}
+}
+
+core.CoreServices
+public interface CoreServices {
+    void showDialog(String title, Node content);
+    void openInNewWindow(LifeModule module);
+    void sendNotification(String message);
+    Object getGlobalSettings();
+    void openModule(String moduleName);
+    java.util.List<String> getAvailableModules();
+    default java.util.List<AITool> getAvailableAITools() { return java.util.Collections.emptyList(); }
+    default java.util.List<ModulePermissionTarget> getModulePermissionTargets() { return java.util.Collections.emptyList(); }
+    default LifeOSThemeState getThemeState() { return new LifeOSThemeState(false, false, false, false, 1.0, ""); }
+    default LifeOSMediaCenter getMediaCenter() { return null; }
+    default boolean isModulePermissionAllowed(String moduleId, String permission) { return false; }
+    default int getSamiraAutomationLevel(String moduleId) { return 0; }
+    default String completeWithInternalLLM(String moduleId, String systemPrompt, String userMessage, boolean forceJsonResponse) { return ""; }
+    Path getModuleStoragePath(String moduleId);
+    default LifeOSFileService getFileService() { return null; }
+    default java.util.List<LifeOSFileReference> getRemoteFileEntryPoints(String moduleId) { return java.util.Collections.emptyList(); }
+    default boolean isRemoteFileReferenceAllowed(String moduleId, LifeOSFileReference reference, boolean write) { return false; }
+    Object requestSharedData(String dataKey);
+    boolean isModuleInstalled(String moduleId);
+    void startModelDownload(ModelDefinition model, java.util.function.Consumer<Double> onProgress, Runnable onComplete, java.util.function.Consumer<Exception> onError);
+    void setModuleBadge(String moduleName, int count);
+    double getDownloadProgress();
+    String getDownloadStatusText();
+    boolean isDownloading();
+    default RoadmapService getRoadmapService() { return null; }
+    default TrashService getTrashService() { return null; }
+    default AgentRuntimeStore getAgentRuntimeStore() { return null; }
+    default void registerModule(LifeModule module) {}
+    default void unregisterModule(String moduleName) {}
+    default void unregisterModuleSource(Path sourcePath) {}
+}
+
+core.AITool
+public class AITool {
+    public AITool();
+    public AITool(String toolName, String description);
+    public AITool(String toolName, String description, java.util.function.Function<String, String> action);
+    public AITool(String toolName, String description, String inputSchema);
+    public AITool(String toolName, String description, String inputSchema, java.util.function.Function<String, String> action);
+    public AITool(String toolName, String description, String inputSchema, AIToolSafety safetyLevel);
+    public AITool(String toolName, String description, String inputSchema, AIToolSafety safetyLevel, java.util.function.Function<String, String> action);
+    public AITool(String toolName, String description, String inputSchema, AIToolSafety safetyLevel, boolean requiresConfirmation);
+    public AITool(String toolName, String description, String inputSchema, AIToolSafety safetyLevel, boolean requiresConfirmation, java.util.function.Function<String, String> action);
+    public String getToolName();
+    public String getDescription();
+    public String getInputSchema();
+    public AIToolSafety getSafetyLevel();
+    public boolean requiresConfirmation();
+    public String execute(String jsonInput);
+}
+
+core.AgentToolResult
+public class AgentToolResult {
+    public static String success(String message);
+    public static String error(String message);
+    public static String confirmationRequired(String message);
+}
+
+core.ModuleAIContext
+public class ModuleAIContext {
+    public ModuleAIContext(String situationalPrompt, String requestedLoRAPath, java.util.List<AITool> registeredTools);
+    public String getSituationalPrompt();
+    public String getRequestedLoRAPath();
+    public java.util.List<AITool> getRegisteredTools();
+}
+
 Minimalstruktur eines Java-Moduls
 public class NotesModule implements LifeModule {
     private CoreServices core;
@@ -57,13 +146,17 @@ public class NotesModule implements LifeModule {
     public void onShutdown() {}
 }
 
-CoreServices richtig nutzen
-- core.getModuleStoragePath(getModuleId()) für private Moduldaten verwenden.
-- core.getFileService() nutzen, wenn Dateien in der verwalteten LifeOS-Ordnerstruktur liegen sollen.
-- Für gemeinsame Dateien immer LifeOSFileReference, LifeOSFileMetadata und die Methoden des LifeOSFileService nutzen; keine absoluten Host-Pfade in Modulmodellen speichern.
-- Gemeinsame Arbeitsbereiche liegen als Scope WORKSPACE im Core. Eigene Moduldaten bleiben Scope MODULE. Exporte liegen Scope EXPORT.
+CoreServices und LifeOS-Speicher richtig nutzen
+- core.getModuleStoragePath(getModuleId()) nur für private, modulinterne Daten verwenden.
+- Für gemeinsame oder später auffindbare Dateien core.getFileService() nutzen; Module speichern dabei LifeOSFileReference statt absolute Host-Pfade.
+- Wichtige LifeOSFileService-Methoden: listProviders(), getProvider(providerId), getModuleDataReference(...), getWorkspaceReference(...), getExportReference(...), describe(...), describeAsync(...), list(...), listAsync(...), openReadStream(...), readText(...), readTextAsync(...), writeText(...), createFolder(...), attachToObject(...), listAttachments(...) und updateTags(...).
+- LifeOSFileReference besteht aus providerId, scope, ownerId und relativePath. Der lokale Provider nutzt providerId local; NAS nutzt providerId nas.
+- Scopes: MODULE für Moduldaten, WORKSPACE für gemeinsame Arbeitsbereiche, EXPORT für bewusst exportierbare Dateien, REMOTE für NAS-/Cloud-Provider.
+- NAS-Einstiege werden über core.getRemoteFileEntryPoints(getModuleId()) abgefragt. Module erhalten alle vom Nutzer eingerichteten NAS-Ordner als read-only Remote-Roots; die Liste kann mehrere Eintraege enthalten.
+- NAS-Dateien müssen wegen möglichem Festplatten-Spin-up über describeAsync(...), listAsync(...) oder readTextAsync(...) geladen werden. Keine automatischen Hintergrundscans oder Indexierungs-Schleifen starten.
+- Für NAS-Referenzen gilt providerId nas, scope REMOTE und ownerId getModuleId(). Module verwenden die vom Core gelieferten Root-Referenzen unverändert und hängen nur Kindpfade daran an. Zugangsdaten bleiben im Core.
 - Dateianhänge an Termine, Aufgaben, Notizen oder andere Modulobjekte über attachToObject(...) speichern, damit ein späterer Dateimanager die Verknüpfungen sehen kann.
-- listProviders() liefert aktuell den lokalen LifeOS-Speicher und ist bereits auf spätere NAS-/Cloud-Provider vorbereitet.
+- Tags und Metadaten über LifeOSFileMetadata und updateTags(...) verwalten, damit Suche, Anhänge und spätere Dateiansichten dieselben Informationen sehen.
 - core.openModule(name) kann andere Module öffnen.
 - core.getAvailableModules() liefert bekannte Module.
 - core.getAvailableAITools() liefert zentrale Agenten-Werkzeuge.
@@ -74,6 +167,72 @@ CoreServices richtig nutzen
 - core.getThemeState() liefert Light-/Darkmode, Designmodus, Sidebar-Zustand, Font-Skalierung und CSS-Variablen.
 - core.isModulePermissionAllowed(moduleId, permission) prüft freigegebene Runtime-Rechte.
 - core.getSamiraAutomationLevel(moduleId) liefert die effektive Samira-Automationsstufe.
+- core.getMediaCenter() liefert die globale Mediensteuerung für die LifeOS-Titelleiste.
+
+NAS-Ordner in Modulen verwenden
+Alle vom Nutzer unter Settings → NAS eingerichteten Ordner stehen jedem Modul ohne eigene Konfiguration zur Verfügung. Die Methode getRemoteFileEntryPoints(getModuleId()) bzw. die Bridge-Methode lifeos.files.remoteRoots liefert eine Liste von LifeOSFileReference-Objekten. Jede Referenz hat providerId "nas", scope REMOTE, ownerId gleich der eigenen Modul-ID und einen relativePath der Form "__lifeos_nas_roots/<folderId>" für den Wurzelordner. Unterordner und Dateien darin haben den relativePath "__lifeos_nas_roots/<folderId>/unterordner/datei.txt". Zugangsdaten (Host, Nutzer, Passwort) verbleiben vollständig im Core; Module erhalten nur die Referenzen.
+
+JavaFX-Modul (Java, direkt):
+// Alle NAS-Roots laden
+List<LifeOSFileReference> nasRoots = core.getRemoteFileEntryPoints(getModuleId());
+if (!nasRoots.isEmpty()) {
+    LifeOSFileReference root = nasRoots.get(0);
+    // Inhalt des Wurzelordners auflisten
+    core.getFileService().listAsync(root).thenAccept(items ->
+        Platform.runLater(() -> items.forEach(item -> System.out.println(item.getRelativePath())))
+    );
+    // Datei unterhalb des Roots lesen
+    LifeOSFileReference file = new LifeOSFileReference(
+        "nas", LifeOSFileScope.REMOTE, getModuleId(),
+        root.getRelativePath() + "/unterordner/dokument.txt"
+    );
+    core.getFileService().readTextAsync(file)
+        .thenAccept(text -> Platform.runLater(() -> label.setText(text)));
+}
+
+Web-Modul (JavaScript in WebView):
+// Alle NAS-Roots als JSON-Array abrufen
+const roots = JSON.parse(coreAPI.getRemoteFileEntryPointsJson());
+if (roots.length > 0) {
+    const root = roots[0]; // {providerId, scope, ownerId, relativePath}
+    // Unterordner und Dateien auflisten
+    const items = JSON.parse(coreAPI.callBridgeJson("lifeos.files.list", JSON.stringify({
+        providerId: root.providerId, scope: root.scope,
+        ownerId: root.ownerId, path: root.relativePath
+    })));
+    // Datei lesen
+    const text = JSON.parse(coreAPI.callBridgeJson("lifeos.files.readText", JSON.stringify({
+        providerId: root.providerId, scope: root.scope,
+        ownerId: root.ownerId, path: root.relativePath + "/dokument.txt"
+    })));
+}
+
+Prozessmodul (Runtime Bridge, stdio-jsonrpc):
+// Schritt 1: NAS-Roots abfragen
+→ {"jsonrpc":"2.0","id":1,"method":"lifeos.files.remoteRoots","params":{}}
+← {"id":1,"result":[{"providerId":"nas","scope":"REMOTE","ownerId":"com.example.modul","relativePath":"__lifeos_nas_roots/abc123"}]}
+// Schritt 2: Ordner auflisten
+→ {"jsonrpc":"2.0","id":2,"method":"lifeos.files.list","params":{"providerId":"nas","scope":"REMOTE","ownerId":"com.example.modul","path":"__lifeos_nas_roots/abc123"}}
+// Schritt 3: Datei lesen
+→ {"jsonrpc":"2.0","id":3,"method":"lifeos.files.readText","params":{"providerId":"nas","scope":"REMOTE","ownerId":"com.example.modul","path":"__lifeos_nas_roots/abc123/dokument.txt"}}
+
+NAS-Regeln für Module:
+- NAS-Root-Referenzen immer über getRemoteFileEntryPoints() oder lifeos.files.remoteRoots holen; nie hartcodieren.
+- Zugriffe ausschließlich asynchron (listAsync, readTextAsync, callBridgeJson, Bridge-Methoden) durchführen, damit die UI nicht einfriert.
+- Kein automatisches Scannen oder Indexieren im Hintergrund; NAS-Zugriffe nur auf explizite Nutzerinteraktion hin anstoßen.
+- NAS ist aktuell read-only für Module; Schreibzugriffe werden vom Core abgelehnt.
+- Die Manifest-Permission lifeos.files.remote deklarieren, damit LifeOS den Zugriff protokolliert.
+- Fehler (Verbindungsabbruch, Timeout, SMB-Fehler) in der UI verständlich anzeigen und nicht als leere Liste stillschweigend verwerfen.
+
+Globale Mediensteuerung
+- Medienmodule melden den aktuellen Wiedergabestatus über core.getMediaCenter().publish(session, controller).
+- LifeOSMediaSession enthält moduleId, moduleName, title, artist, album, coverImagePath, playing, canPlayPause, canGoPrevious, canGoNext und canChangeVolume.
+- LifeOSMediaController implementiert playPause(), previous(), next(), volumeDown() und volumeUp().
+- Die Titelleiste zeigt Cover, Titel, Künstler sowie Zurück, Play/Pause, Weiter, Leiser und Lauter an, sobald eine sichtbare Session gemeldet wurde.
+- Titel, Künstler, Album und Dateipfade dürfen Umlaute, Leerzeichen und Sonderzeichen enthalten. Die Modul-ID bleibt dagegen technisch stabil und pfadfreundlich.
+- Beim Beenden oder Stoppen eines Medienmoduls muss core.getMediaCenter().clear(getModuleId()) aufgerufen werden.
+- Web-Module melden den Status mit coreAPI.updateMediaSessionJson(JSON.stringify({...})) und reagieren auf window.addEventListener("lifeos-media-control", event => ...).
+- Prozessmodule melden den Status per Runtime Bridge über lifeos.media.update und entfernen ihn über lifeos.media.clear. Aktionen aus der Titelleiste kommen als JSON-Zeile mit method lifeos.media.control und params.action an.
 
 Theme und UI
 - Module müssen den aktuellen LifeOS-Light-/Darkmode übernehmen.
@@ -89,6 +248,10 @@ Ein Modul erweitert Samira und andere Agenten über ModuleAIContext.
 - registeredTools enthält AITool-Instanzen für konkrete Aktionen.
 
 AITool-Regeln
+- core.AITool ist eine konkrete Klasse, kein Interface. Eigene Tools werden normalerweise mit new AITool(...) erzeugt und in ModuleAIContext registriert.
+- Nicht verwenden: class MyTool implements AITool. Das kompiliert nicht, weil AITool keine Schnittstelle ist.
+- Falls ein spezialisiertes Tool als eigene Klasse nötig ist, muss es AITool erweitern. Wird ein super(...)-Konstruktor ohne action genutzt, muss die Klasse execute(String jsonInput) überschreiben.
+- Einfaches Beispiel: new AITool("notes_search", "Sucht Notizen.", "{"query":"Suchtext"}", AIToolSafety.READ_ONLY, json -> AgentToolResult.success("[]")).
 - Toolnamen kurz, stabil und eindeutig wählen, z. B. notes_search oder notes_create.
 - description so schreiben, dass der Agent weiß, wann das Werkzeug verwendet werden soll.
 - inputSchema als JSON-Beispiel angeben, z. B. {"query":"Suchtext"}.
@@ -100,9 +263,11 @@ AITool-Regeln
 
 Runtime Bridge und Berechtigungen
 - Jedes Modul arbeitet grundsätzlich in seinem eigenen LifeOS-Modulordner.
-- Direkte Host-Pfade außerhalb von LifeOS sind nicht erlaubt; NAS und Cloud werden später als LifeOS-Speicherquellen angebunden.
-- Gemeinsame Dateien werden über providerId, scope, ownerId und path referenziert. Erlaubte Scopes für externe Module sind module, workspace und export.
-- Die Berechtigungen lifeos.files.read, lifeos.files.write, lifeos.files.attach und lifeos.files.remote steuern gemeinsame LifeOS-Dateien, Dateianhänge und spätere externe Speicherquellen.
+- Direkte Host-Pfade außerhalb von LifeOS sind nicht erlaubt; NAS wird als Core-Provider angebunden, Cloud folgt später analog.
+- Gemeinsame Dateien werden über providerId, scope, ownerId und path referenziert. Erlaubte Scopes für externe Module sind module, workspace, export und remote.
+- NAS-Referenzen nutzen providerId nas, scope remote, ownerId moduleId und path relativ zum freigegebenen NAS-Einstieg.
+- Prozessmodule rufen zuerst lifeos.files.remoteRoots ab. Diese Methode kann mehrere NAS-Roots liefern; danach verwenden Module providerId, scope, ownerId und path aus der jeweiligen Referenz für lifeos.files.metadata, lifeos.files.list oder lifeos.files.readText.
+- Die Berechtigungen lifeos.files.read, lifeos.files.write, lifeos.files.attach und lifeos.files.remote steuern gemeinsame LifeOS-Dateien, Dateianhänge und externe Speicherquellen.
 - Internetzugriff wird global und pro Modul in den Settings freigegeben. Wenn LifeOS global kein Internet darf, darf es kein Modul.
 - Abhängigkeiten wie Maven-, npm-, pip- oder Composer-Pakete laufen später über die Runtime Bridge, sobald das ausführende Modul Internetzugriff hat.
 - Cross-Modul-Lesen und -Schreiben ist erlaubt, aber über offizielle Core-/Modul-Tools statt über direkte Dateipfade.
@@ -110,7 +275,7 @@ Runtime Bridge und Berechtigungen
 - Samiras Code-Automation folgt einer Stufe von 0 bis 5: Nur lesen, Vorschläge, kleine Änderungen, Projektänderungen, Runtime/Dependencies, systemweite Aktionen.
 - Prozessmodule erhalten LIFEOS_MODULE_ID, LIFEOS_STORAGE_PATH, LIFEOS_THEME_JSON, LIFEOS_PERMISSIONS_JSON, LIFEOS_NETWORK_ALLOWED und LIFEOS_BRIDGE_PROTOCOL als Umgebungsvariablen.
 - Prozessmodule können bei bridgeProtocol stdio-jsonrpc JSON-Zeilen an stdout schreiben. LifeOS antwortet auf stdin.
-- Wichtige Bridge-Methoden: lifeos.bridge.hello, lifeos.theme.get, lifeos.permission.check, lifeos.permissions.list, lifeos.network.fetchText, lifeos.storage.readText, lifeos.storage.writeText, lifeos.storage.list, lifeos.modules.readText, lifeos.modules.writeText, lifeos.modules.listFiles, lifeos.files.providers, lifeos.files.metadata, lifeos.files.list, lifeos.files.readText, lifeos.files.writeText, lifeos.files.createFolder, lifeos.files.attach, lifeos.files.attachments, lifeos.llm.complete und lifeos.notify.
+- Wichtige Bridge-Methoden: lifeos.bridge.hello, lifeos.theme.get, lifeos.permission.check, lifeos.permissions.list, lifeos.network.fetchText, lifeos.storage.readText, lifeos.storage.writeText, lifeos.storage.list, lifeos.modules.readText, lifeos.modules.writeText, lifeos.modules.listFiles, lifeos.files.providers, lifeos.files.remoteRoots, lifeos.files.metadata, lifeos.files.list, lifeos.files.readText, lifeos.files.writeText, lifeos.files.createFolder, lifeos.files.attach, lifeos.files.attachments, lifeos.media.update, lifeos.media.clear, lifeos.llm.complete und lifeos.notify.
 - Die Bridge löst Pfade immer innerhalb von data/modules/<moduleId> auf. Absolute Host-Pfade werden nicht über die Bridge akzeptiert.
 
 Zugriff auf LifeOS' internes LLM
@@ -138,7 +303,7 @@ Sidebar-Eintrag und Icon
 - JAR-Module erscheinen automatisch, wenn sie geladen und nicht deaktiviert sind.
 - getModuleName() bestimmt den Sidebar-Text.
 - getFontIconName() bestimmt das moderne Sidebar-Icon. LifeOS nutzt Ikonli FontAwesome 5 Namen wie fas-cube, fas-calendar, fas-book, fas-terminal, fas-sticky-note, fas-tasks oder fab-java.
-- getModuleIconPath() oder ein Bildpfad im Manifest-Icon kann ein echtes PNG/JPG-Icon fuer die Sidebar liefern.
+- getModuleIconPath() oder ein Bildpfad im Manifest-Icon kann ein echtes PNG/JPG-Icon für die Sidebar liefern.
 - getSubModules() kann zusätzliche Sidebar-Einträge liefern; jedes Submodul braucht eigenen Namen, eigene ID und eigenes Icon.
 - Badges werden über core.setModuleBadge(getModuleName(), count) gesetzt und beim Öffnen entfernt.
 
